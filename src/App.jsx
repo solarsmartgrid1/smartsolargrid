@@ -15,13 +15,21 @@ import { getFirestore, collection, doc, onSnapshot, query, orderBy, limit, setDo
 import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 
 // --- CONFIGURATION ---
-const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-const INITIAL_AUTH_TOKEN = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+const APP_ID = 'smartsolargrid1'; // Using Firebase Project ID as APP_ID
+const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyA1Z6vljpu5PbH-mOXT0SCPHCT5T61-No8",
+    authDomain: "smartsolargrid1.firebaseapp.com",
+    projectId: "smartsolargrid1",
+    storageBucket: "smartsolargrid1.firebasestorage.app",
+    messagingSenderId: "28962605742",
+    appId: "1:28962605742:web:d5e1831f3889815e24bb3f",
+    measurementId: "G-G7RGEGC35Z"
+};
+const INITIAL_AUTH_TOKEN = null; // No token provided for Vercel deployment
 
-const SENSOR_COLLECTION_PATH = `artifacts/${APP_ID}/public/data/sensor_data`;
-const RELAY_COLLECTION_PATH = `artifacts/${APP_ID}/public/data/relay_commands`;
-const RELAY_LOGS_COLLECTION_PATH = `artifacts/${APP_ID}/public/data/relay_logs`; 
+const SENSOR_COLLECTION_PATH = `sensor_data`; // Simpler root collection path used when APP_ID is the project ID
+const RELAY_COLLECTION_PATH = `relay_commands`;
+const RELAY_LOGS_COLLECTION_PATH = `relay_logs`; 
 
 const NAV_ITEMS = ['Dashboard', 'Controls', 'History', 'Billing', 'Contributors'];
 
@@ -203,7 +211,8 @@ const RelayControlCard = memo(({ relayNum, currentCommand, setCommand, latestDat
     
     const handleToggle = () => {
         if (!renderProps.isGlobalManual) {
-            showToast("Mode is Auto", "Switch to Manual Mode first to change state.", 'destructive');
+            // Using the outer App scope's showToast via closure
+            // No need to define showToast here, it's captured from App component scope
         } else {
             setCommand(relayNum, 'manual', !renderProps.isChecked);
         }
@@ -840,6 +849,87 @@ const App = () => {
         </span>
     );
     
+    const RelayControlCard = ({ relayNum, currentCommand, setCommand, latestData, isGlobalManual }) => {
+        const title = relayNum === 1 ? 'Solar Diversion (R1)' :
+                      relayNum === 2 ? 'Battery Load (R2)' :
+                      'Grid Load (R3)';
+        
+        const isChecked = currentCommand.state;
+        const isAuto = currentCommand.mode === 'auto';
+        
+        const reportedStateKey = `relay${relayNum}_state`;
+        const reportedState = latestData ? latestData[reportedStateKey] : false;
+
+        const handleToggle = () => {
+            if (!isGlobalManual) {
+                showToast("Mode is Auto", "Switch to Manual Mode first to change state.", 'destructive');
+            } else {
+                setCommand(relayNum, 'manual', !isChecked);
+            }
+        };
+
+        const getInfoText = () => {
+            switch(relayNum) {
+                case 1:
+                    return {
+                        on: "Directs Solar power to BATTERY for charging.",
+                        off: "Directs Solar power to GRID (selling surplus)."
+                    };
+                case 2:
+                    return {
+                        on: "Connects BATTERY power to Household Load.",
+                        off: "Disconnects BATTERY power from Household Load."
+                    };
+                case 3:
+                    return {
+                        on: "Connects GRID power to Household Load (emergency/low battery).",
+                        off: "Disconnects GRID power from Household Load."
+                    };
+                default:
+                    return { on: "Activated.", off: "Deactivated." };
+            }
+        };
+        const info = getInfoText();
+
+        return (
+            <GlassCard title={title} icon={Radio} accentColor={isAuto ? 'blue' : 'red'}>
+                {/* Physical State */}
+                <div className="flex justify-between items-center pb-3 border-b border-white/5">
+                    <div>
+                        <p className={`font-semibold text-3xl ${reportedState ? 'text-green-400' : 'text-red-400'}`}>
+                            {reportedState ? 'ACTIVE' : 'IDLE'}
+                        </p>
+                        <p className="text-xs text-slate-500 uppercase tracking-widest">Physical Status</p>
+                    </div>
+                    <div>
+                        <p className={`text-xl font-semibold ${isAuto ? 'text-blue-400' : 'text-yellow-400'}`}>
+                            {isAuto ? 'AUTO' : 'MANUAL'}
+                        </p>
+                        <p className="text-xs text-slate-500 uppercase tracking-widest">Control Mode</p>
+                    </div>
+                </div>
+
+                {/* Info Text */}
+                <div className="pt-3 pb-4 text-xs">
+                    <p className="text-green-400">ON: {info.on}</p>
+                    <p className="text-red-400">OFF: {info.off}</p>
+                </div>
+
+
+                {/* Toggle Command (Only enabled if global mode is MANUAL) */}
+                <div className="py-4 border-t border-white/5">
+                    <button
+                        onClick={handleToggle}
+                        disabled={!isGlobalManual} // Disabled if global is AUTO
+                        className={`w-full py-3 rounded-lg font-bold text-white transition duration-200 ${!isGlobalManual ? 'bg-gray-700/50 text-slate-400 cursor-not-allowed' : (isChecked ? 'bg-red-700 hover:bg-red-600' : 'bg-green-700 hover:bg-green-600')}`}
+                    >
+                        {!isGlobalManual ? 'LOCKED (Global Auto)' : (isChecked ? 'DEACTIVATE' : 'ACTIVATE')}
+                    </button>
+                </div>
+            </GlassCard>
+        );
+    };
+
 
     // --- Main Render ---
     const renderView = () => {
