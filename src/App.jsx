@@ -1,5 +1,5 @@
 // This is a single-file React application using functional components and hooks.
-// V9: FIXED FIRESTORE PATHS to match ESP32 root collections ("sensor_data").
+// V10: ADDED ERROR LOGGING for Firestore Listeners to debug permission issues.
 
 import React, { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 
@@ -335,7 +335,14 @@ const App = () => {
         // Latest Data Listener
         const latestQuery = query(collection(db, SENSOR_COLLECTION_PATH), orderBy('timestamp', 'desc'), limit(1));
         const unsubscribeLatest = onSnapshot(latestQuery, (snapshot) => {
-            if (!snapshot.empty) { setLatestData(snapshot.docs[0].data()); }
+            if (!snapshot.empty) { 
+                setLatestData(snapshot.docs[0].data()); 
+            } else {
+                console.log("Waiting for data... Collection seems empty or query failed.");
+            }
+        }, (error) => {
+            console.error("Error fetching latest data:", error);
+            showToast("Data Sync Error", "Check Firebase permissions.", "destructive");
         });
 
         // Historical Data Listener
@@ -343,6 +350,8 @@ const App = () => {
         const unsubscribeHistory = onSnapshot(historyQuery, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).reverse();
             setHistoricalData(data);
+        }, (error) => {
+            console.error("Error fetching history:", error);
         });
 
         // Relay Commands Listener
@@ -354,6 +363,8 @@ const App = () => {
                 2: { ...prev[2], ...commands['2'] },
                 3: { ...prev[3], ...commands['3'] },
             }));
+        }, (error) => {
+            console.error("Error fetching relays:", error);
         });
 
         // Billing Data Listener (Firestore: billing_data doc)
@@ -414,8 +425,6 @@ const App = () => {
                 batch.set(relayRef, {
                     mode: newMode,
                     updatedAt: now,
-                    // Note: We deliberately don't change the 'state' field here. 
-                    // ESP32 will handle state based on the new mode (re-running auto logic).
                 }, { merge: true });
             }
             
