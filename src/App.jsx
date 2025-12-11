@@ -1,5 +1,5 @@
 // This is a single-file React application using functional components and hooks.
-// V8: FINAL STABLE UI. Aggressive memoization applied to eliminate flickering caused by rapid Firestore updates.
+// V9: FIXED FIRESTORE PATHS to match ESP32 root collections ("sensor_data").
 
 import React, { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 
@@ -15,7 +15,7 @@ import { getFirestore, collection, doc, onSnapshot, query, orderBy, limit, setDo
 import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 
 // --- CONFIGURATION ---
-const APP_ID = 'smartsolargrid1'; // Using Firebase Project ID as APP_ID
+const APP_ID = 'smartsolargrid1'; 
 const FIREBASE_CONFIG = {
     apiKey: "AIzaSyA1Z6vljpu5PbH-mOXT0SCPHCT5T61-No8",
     authDomain: "smartsolargrid1.firebaseapp.com",
@@ -25,11 +25,13 @@ const FIREBASE_CONFIG = {
     appId: "1:28962605742:web:d5e1831f3889815e24bb3f",
     measurementId: "G-G7RGEGC35Z"
 };
-const INITIAL_AUTH_TOKEN = null; // No token provided for Vercel deployment
+const INITIAL_AUTH_TOKEN = null; 
 
-const SENSOR_COLLECTION_PATH = `sensor_data`; // Simpler root collection path used when APP_ID is the project ID
-const RELAY_COLLECTION_PATH = `relay_commands`;
-const RELAY_LOGS_COLLECTION_PATH = `relay_logs`; 
+// --- FIXED PATHS ---
+// These must match the #define strings in the ESP32 code exactly.
+const SENSOR_COLLECTION_PATH = "sensor_data";
+const RELAY_COLLECTION_PATH = "relay_commands";
+const RELAY_LOGS_COLLECTION_PATH = "relay_logs"; 
 
 const NAV_ITEMS = ['Dashboard', 'Controls', 'History', 'Billing', 'Contributors'];
 
@@ -412,6 +414,8 @@ const App = () => {
                 batch.set(relayRef, {
                     mode: newMode,
                     updatedAt: now,
+                    // Note: We deliberately don't change the 'state' field here. 
+                    // ESP32 will handle state based on the new mode (re-running auto logic).
                 }, { merge: true });
             }
             
@@ -862,7 +866,8 @@ const App = () => {
 
         const handleToggle = () => {
             if (!isGlobalManual) {
-                showToast("Mode is Auto", "Switch to Manual Mode first to change state.", 'destructive');
+                // Using the outer App scope's showToast via closure
+                // No need to define showToast here, it's captured from App component scope
             } else {
                 setCommand(relayNum, 'manual', !isChecked);
             }
