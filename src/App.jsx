@@ -1,5 +1,5 @@
 // This is a single-file React application using functional components and hooks.
-// V10: ADDED ERROR LOGGING for Firestore Listeners to debug permission issues.
+// V11: ROBUST AUTH. Catches authentication errors and proceeds in "Public Mode" to ensure dashboard loads.
 
 import React, { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 
@@ -302,24 +302,27 @@ const App = () => {
 
         const authUnsubscribe = firebaseAuth.onAuthStateChanged(async (user) => {
             if (!user) {
-                if (INITIAL_AUTH_TOKEN) {
-                    try {
+                // If user is not logged in, attempt to sign in anonymously
+                // FIX: Added try/catch block to handle the "configuration-not-found" error gracefully
+                try {
+                    if (INITIAL_AUTH_TOKEN) {
                         await signInWithCustomToken(firebaseAuth, INITIAL_AUTH_TOKEN);
-                    } catch (error) {
+                    } else {
                         await signInAnonymously(firebaseAuth);
                     }
-                } else {
-                    await signInAnonymously(firebaseAuth);
+                } catch (error) {
+                    console.warn("Auth Failed (likely anonymous auth disabled). Continuing in PUBLIC MODE.", error);
+                    // We continue anyway because your database rules are 'allow read, write: if true;'
                 }
             }
+            
+            // Set a user ID (fake one if auth failed) so the app thinks it's ready to fetch data
             setUserId(firebaseAuth.currentUser?.uid || `anon-${Math.random().toString(36).substring(2, 9)}`);
-            setIsAuthReady(true);
-            authUnsubscribe();
+            setIsAuthReady(true); // <--- This now always runs, unlocking the dashboard
         });
 
-        return () => {
-            if (authUnsubscribe) authUnsubscribe();
-        };
+        // Cleanup subscription
+        return () => authUnsubscribe();
     }, []);
 
     // Live Clock
